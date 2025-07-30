@@ -8,10 +8,10 @@
 <muclient>
 <plugin
    name="HyperlinkMapperNotes"
-   author="Athlau"
+   author="Athlau,fizix"
    id="083caff4f4d4b16f38286a41"
    language="Lua"
-   purpose="Shows clickable hyperlinks and updates mappernotecommand alias with those commands"
+   purpose="Shows clickable hyperlinks that can be executed via the mappernotecommand <index> alias."
    save_state="y"
    date_written="2022-11-09 20:15:43"
    requires="5.07"
@@ -19,7 +19,7 @@
    >
 <description trim="y">
 <![CDATA[
-Shows clickable hyperlinks from mapper notes and updates mappernotecommand alias with those commands.
+Shows clickable hyperlinks that can be executed via the mappernotecommand <index> alias.
 ]]>
 </description>
 
@@ -27,17 +27,26 @@ Shows clickable hyperlinks from mapper notes and updates mappernotecommand alias
 
 <triggers>
   <trigger
-   enabled="n"
-   match="^\*\*\* MAPPER NOTE \*\*\* -> (.*)$"
-   regexp="y"
-   send_to="14"
-   sequence="100"
-   name="ShowHyperlinksTrigger"
-   omit_from_output="y"
-  >
-  <send>ShowHyperlinks("%1", true)</send>
-  </trigger>
+    match="^\{exits}\[ Exits: (?<exits>.*) \]$"
+    script="trigger_exits"
+    ignore_case="n"
+    enabled="y"
+    regexp="y"
+    sequence="100"
+    keep_evaluating="y"
+    omit_from_output="y"></trigger>
 </triggers>
+
+<aliases>
+  <alias
+    match="^mappernotecommand (?<index>\d+)$"
+    script="alias_mappernotecommand"
+    enabled="y"
+    regexp="y"
+    sequence="100"
+    ignore_case="y"
+    send_to="12"></alias>
+</aliases>
 
 <!--  Script  -->
 
@@ -47,95 +56,66 @@ Shows clickable hyperlinks from mapper notes and updates mappernotecommand alias
 require "gmcphelper"
 
 help_message = [[
-Parses mapper notes for current room and shows clickable hyperlinks with certain commands.
-Also updates "mappernotecommand" alias with those commands to be used with macro keys etc.
-UPDATE: if you're running client r2249 or later then it will show current room cexits
-as Hyperlinks too.
+Parses mapper notes for current room and shows clickable for embedded commands.
+The commands can also be executed via the mappernotecommand <index> alias.
 
-Just add Hyperlink() to any part of mapper note:
-Hyperlink(whatever_commnd_in_this_room;another_cmd)
-
-When passing by this room plugin will show clickable hyperlink with provided command(s) 
-and update "mappernotecommand" alias with the same command(s).
+Just surround any part of mapper note with backticks to make it a command:
+`whatever_command_in_this_room;another_cmd`
 
 For ex in room [6348]
-Note: key on a mountain goat Hyperlink(qw mountain goat)
-When passing by it will allow you to click a link to do "qw mountain goat",
-you can also bind mappernotecommand to any key and have the same executed without clicking.
+Note: key on a mountain goat `qw mountain goat`
+When passing by it will allow you to click a link to do "qw mountain goat".
 ]]
 
 require "serialize"
-local aard_extras = require "aard_lua_extras"
-local client_version = 0
--- r2249 switched mapper notes output to go through simulate
--- so can just use a trigger now and strip out Hyperlinks from note output.
-local min_version = 2249
 
-function ShowHyperlinks(note, show_note)
-  if show_note then
-    local stripped_note = note:gsub("Hyperlink%((.-)%)", ""):gsub("^%s+", ""):gsub("%s+$", "")
-    if stripped_note ~= "" then
-      Note("*** MAPPER NOTE *** -> " .. stripped_note)
-    end
+note_commands = {}
+
+function alias_mappernotecommand(name, line, wildcards)
+  note_command = nil
+  index = tonumber(wildcards.index)
+
+  if index and index > 0 and index <= #note_commands then
+      note_command = note_commands[index]
   end
 
-  for match in note:gmatch("Hyperlink%((.-)%)") do
-    Hyperlink(match, match, match, "cyan", "blue", false, true)
+  if note_command == nil then
+      print("Mapper note command not found with index " .. index)
+      return
+  end
+  Execute(note_command)
+end
+
+function ShowHyperlinks(note)
+  hyperlink_found = false
+  note_commands = {}
+  command_index = 1
+  for match in note:gmatch("`(.-)%`") do
+    if hyperlink_found then
+      ColourTell("black", "black", " ")
+    end
+    Hyperlink(match, "[" .. match .. "]", match, "magenta", "black", false)
+    note_commands[command_index] = match
+    command_index = command_index + 1
+    hyperlink_found = true
+  end
+  if hyperlink_found then
     Note("")
-    AddAlias("MapperNoteAlias", "mappernotecommand", match, alias_flag.Enabled + alias_flag.Replace, "")
-    SetAliasOption("MapperNoteAlias", "send_to", 10)
+    Note("")
   end
 end
 
-function OnPluginBroadcast(msg, id, name, text)
-  if id == "3e7dedbe37e44942dd46d264" then -- message from the GMCP Handler
-    if (text == "room.info") then
-      local roomid = tonumber(gmcp("room.info.num"))
-
-      -- Only go this route for old clients
-      if client_version < min_version then
-        local rc, notes, found = CallPlugin("b6eae87ccedd84f510b74714", "room_find_notes", roomid)
-        if (rc == error_code.eOK) then
-          if found then
-            ShowHyperlinks(notes, false)
-          end
-        end
-      end
-
-      -- add Hyperlinks with cexits
-      if client_version >= min_version then
-        -- don't show cexits while running
-        if gmcp("char.status.state") ~= "12" then
-          local rc, cexits = CallPlugin("b6eae87ccedd84f510b74714", "room_cexits", roomid)
-          if (rc == error_code.eOK) then
-            local cexits = loadstring(string.format("return %s", cexits))()
-            if cexits ~= nil then
-              for k, v in pairs(cexits) do
-                Hyperlink(k, k .. " -> [" .. v .. "]", "click to " .. k, "cyan", "blue", false, true)
-                Note()
-              end
-            end
-          end
-        end
-      end
+function trigger_exits(name, line, wildcards, style)
+  local roomid = tonumber(gmcp("room.info.num"))
+  local rc, notes, found = CallPlugin("b6eae87ccedd84f510b74714", "room_find_notes", roomid)
+  if (rc == error_code.eOK) then
+    if found then
+      ShowHyperlinks(notes)
     end
   end
-end
-
-function CheckVersion()
-  local version, err = aard_extras.PackageVersion()
-  if err == nil then
-    client_version = version
-    EnableTrigger("ShowHyperlinksTrigger", client_version >= min_version)
-  end
-end
-
-function OnPluginConnect()
-  CheckVersion()
 end
 
 function OnPluginInstall()
-  CheckVersion()
   print("HyperlinkMapperNotes loaded.")
   print(help_message)
 end
