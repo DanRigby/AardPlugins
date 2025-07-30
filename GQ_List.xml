@@ -1,0 +1,527 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE muclient>
+<!-- Saved on Thursday, January 10, 2024, 4:25 PM -->
+<!-- MuClient version 5.07-pre -->
+
+<muclient>
+<plugin
+   name="GQ_List"
+   author="Memnoch"
+   id="c4d0dab117586c793985623f"
+   language="Lua"
+   purpose="Shows GQ List in a miniwindow."
+   save_state="y"
+   date_written="2024-01-10 4:24:13"
+   requires="5.07"
+   version="3.2"
+   >
+
+</plugin>
+
+
+<!--  Script  -->
+
+<script>
+<![CDATA[
+
+require "themed_miniwindows"
+require "gmcphelper" -- adds the gmcp() function for simplifying data access
+require "tprint"
+dofile(GetInfo(60).."aardwolf_colors.lua")
+
+local win = "gqwin_" .. GetPluginID()
+local qgsound = "global_quest.wav"
+local gqhistory = {}
+sound_on = sound_on or true
+auto_toggle = auto_toggle or false
+toggle25 = toggle25 or true
+toggle200 = toggle200 or true
+toggle201 = toggle201 or true
+local plugin_id_z_order = "462b665ecb569efbf261422f"
+local char_state = {3, 4, 8, 9, 11, 12}
+menu_string = menu_string or "!+Sound|Auto Hide|>Threshhold|+24 Wins or Fewer|+25 to 199 Wins|+200 Wins or More|<|-|Bring to Front|Send to Back"
+local level = level or 1
+
+-- main draw function
+function gq_list_end(name, line, wildcards, styles)
+  -- clears window on gq list update
+  my_window:blank()
+  valid_range = false
+  hotspots = WindowHotspotList(win)
+  if hotspots then
+    for k, v in pairs(hotspots) do 
+      if string.sub(v, 1, 8) == "hotspot_" or v == "titlemenu" then
+        WindowDeleteHotspot (win, v)
+      end
+    end
+  end -- if any 
+
+  -- set menu hotspot
+  WindowAddHotspot(win, "titlemenu", 0, 0, tonumber(WindowInfo(win,3)), 20, "", "", "mousedown_drag", "", "menu_mouseup", "Drag to move window\nRight-click for menu", 0, 0)
+
+  -- rebuilds the GQ list each tick
+  WindowFont(win, "f1", "Dina", 8, false, false, false, false, 0)
+  WindowText(win, "f1", "Num   Type              From  To  Status     Timer Players", 5, 20, 0, 0, ColourNameToRGB("white"), false)
+  WindowText(win, "f1", "----- ----------------- ---- ---- ---------- ----- -------", 5, 30, 0, 0, ColourNameToRGB("white"), false)
+
+  row_del = 0
+  if #GQ_table > 0 then
+    for k,v in pairs(GQ_table) do
+      if string.sub(v, 7,10) == "Less" then
+        if toggle25 then
+          add_text(v, tonumber(k), row_del)
+        else
+--          GQ_table[k] = nil
+          row_del = row_del + 1
+        end  -- if toggle25
+      elseif string.sub(v, 7,8) == "25" then
+        if toggle200 then
+          add_text(v, tonumber(k), row_del)
+        else
+--          GQ_table[k] = nil
+          row_del = row_del + 1
+        end  -- toggle200
+	  elseif string.sub(v,7,9) == "200" then
+	    if toggle201 then
+		  add_text(v, tonumber(k), row_del)
+		else
+--		    GQ_table[k] = nil
+		  row_del = row_del + 1
+		end  -- toggle201
+      else
+        add_text(v, tonumber(k), row_del)
+      end  -- if stringgsub
+    end  -- for
+
+  else
+    WindowText(win, "f1", "No active Global Quests.", 5, 42, 0, 0, ColourNameToRGB("white"), false)
+    row_del = row_del + 1
+  end  -- if
+
+  if row_del == #GQ_table then
+    WindowText(win, "f1", "All Active Global Quests Filtered Out.", 5, 42, 0, 0, ColourNameToRGB("white"), false)
+  end
+  
+  WindowDragHandler(win, "titlemenu", "dragmove", "dragrelease", 0)
+  my_window:dress_window()
+  
+  -- show window if GQ found in level range and auto toggle is on
+  if auto_toggle and valid_range then
+    my_window:show()
+  elseif auto_toggle then
+    my_window:hide()
+  end  -- if
+
+end  -- function
+
+function add_text(text, row, row_del)
+  if tonumber(string.sub(text, 31, 33)) >= tonumber(level) and tonumber(string.sub(text, 26, 28)) <= tonumber(level) then
+    WindowText(win, "f1", text, 5, (tonumber(row) - row_del) * 12 + 30, 0, 0, ColourNameToRGB("lime"), false)
+    WindowAddHotspot(win, "hotspot_" .. string.sub(text,1,5), 5, (tonumber(row) - row_del) * 12 + 32, 400, (tonumber(row) - row_del) * 12 + 42, "", "", "", "", "mouseup", "Left-click to see GQ info\nRight-click to join", 1, 0)
+    gqsoundcheck(string.sub(text,1,5))
+    valid_range = true
+
+  elseif tonumber(string.sub(text, 26, 28)) == tonumber(level) + 1 then
+    WindowText(win, "f1", text, 5, (tonumber(row) - row_del) * 12 + 30, 0, 0, ColourNameToRGB("yellow"), false)
+    WindowAddHotspot(win, "hotspot_" .. string.sub(text,1,5), 5, (tonumber(row) - row_del) * 12 + 32, 400, (tonumber(row) - row_del) * 12 + 42, "", "", "", "", "mouseup", "Left-click to see GQ info\nRight-click to join", 1, 0)
+    gqsoundcheck(string.sub(text,1,5))
+    valid_range = true
+
+  else
+    WindowText(win, "f1", text, 5, (tonumber(row) - row_del) * 12 + 30, 0, 0, ColourNameToRGB("red"), false)
+    WindowAddHotspot(win, "hotspot_" .. string.sub(text,1,5), 5, (tonumber(row) - row_del) * 12 + 32, 400, (tonumber(row) - row_del) * 12 + 42, "", "", "", "", "mouseup", "Left-click to see GQ info\nRight-click to join", 1, 0)
+  end  -- if tonumber
+end  -- function
+
+function gqsoundcheck(gqid)
+  match_found = false
+  if #gqhistory > 0 then
+
+    for j = 1, #gqhistory do
+      if gqhistory[j] == gqid then
+        match_found = true
+      end  -- if
+    end  -- for
+
+    if match_found == false then
+      gqhistory[#gqhistory + 1] = gqid
+      if sound_on then
+        PlaySound(0, GetInfo(74) .. qgsound, false, 100, 0)
+      end  -- if
+      ColourNote("white","red","*****************************")
+      ColourNote("white","red","* Global Quest Available!!! *")
+      ColourNote("white","red","*****************************")
+    end  -- if
+
+  else
+    gqhistory[#gqhistory + 1] = gqid
+    if sound_on then
+      PlaySound(0, GetInfo(74) .. qgsound, false, 100, 0)
+    end  -- if
+    ColourNote("white","red","*****************************")
+    ColourNote("white","red","* Global Quest Available!!! *")
+    ColourNote("white","red","*****************************")
+  end  -- if
+
+  while #gqhistory > 5 do
+    table.remove(gqhistory, 1)
+  end  -- while
+--  tprint(gqhistory)
+
+end  -- function
+
+function togglesound()
+  if sound_on == false then
+    sound_on = true
+    Note("GQ Info Sound ON.")
+    menu_string = string.gsub(menu_string, "!Sound", "!%+Sound")
+  else 
+    sound_on = false
+    Note("GQ Info Sound OFF.")
+    menu_string = string.gsub(menu_string, "!%+Sound", "!Sound")
+  end  -- if
+  SaveState()
+end  -- function
+
+function togglewin()
+  if auto_toggle == false then
+    auto_toggle = true
+    Note("GQ Info Auto Toggle ON. Will update next server tick. Manually show with \"gqshow\".")
+    menu_string = string.gsub(menu_string, "|Auto Hide", "|%+Auto Hide")
+  else
+    auto_toggle = false
+    Note("GQ Info Auto Toggle OFF. Will update next server tick. Manually show with \"gqshow\".")
+    menu_string = string.gsub(menu_string, "|%+Auto Hide", "|Auto Hide")
+  end  -- if
+  SaveState()
+end  -- function
+
+function toggle_25()
+  if toggle25 == false then
+    toggle25 = true
+    Note("Toggled ON notifications of GQs with 24 or fewer wins.  Updates on next server tick.")
+    menu_string = string.gsub(menu_string, "|24 Wins or Fewer", "|%+24 Wins or Fewer")
+  else
+    toggle25 = false
+    Note("Toggled OFF notifications of GQs with 24 or fewer wins.  Updates on next server tick.")
+    menu_string = string.gsub(menu_string, "|%+24 Wins or Fewer", "|24 Wins or Fewer")
+  end
+  SaveState()
+end
+
+function toggle_200()
+  if toggle200 == false then
+    toggle200 = true
+    Note("Toggled ON notification of GQs with 25 to 199 wins. Updates on next server tick.")
+    menu_string = string.gsub(menu_string, "|25 to 199 Wins", "|%+25 to 199 Wins")
+  else
+    toggle200 = false
+    Note("Toggled OFF notification of GQs with 25 to 199 wins. Updates on next server tick.")
+    menu_string = string.gsub(menu_string, "|%+25 to 199 Wins", "|25 to 199 Wins")
+  end
+  SaveState()
+end
+
+function toggle_201()
+  if toggle201 == false then
+    toggle201 = true
+    Note("Toggled ON notification of GQs with 200 or more wins. Updates on next server tick.")
+    menu_string = string.gsub(menu_string, "|200 Wins or More", "|%+200 Wins or More")
+  else
+    toggle200 = false
+    Note("Toggled OFF notification of GQs with 200 or more wins. Updates on next server tick.")
+    menu_string = string.gsub(menu_string, "|%+200 Wins or More", "|200 Wins or More")
+  end
+  SaveState()
+end
+
+function bring_to_front()
+  CallPlugin(plugin_id_z_order, "boostMe", win)
+  Note("GQ Info Window Moved to Front")
+  SaveState()
+end
+
+function send_to_back()
+  CallPlugin(plugin_id_z_order, "dropMe", win)
+  Note("GQ Info Window Moved to Back")
+  SaveState()
+end
+
+
+my_window = ThemedBasicWindow(
+   win,                              -- string, required, a unique identifier for this window
+   0,                                -- integer, required, where to put it if the player hasn't moved it
+   0,                                -- integer, required, where to put it if the player hasn't moved it
+   400,                              -- integer, required, how big to make it if the player hasn't moved it
+   100,                              -- integer, required, how big to make it if the player hasn't moved it
+   "Active Global Quests",           -- string, optional (nil means no titlebar), text to put into the title
+   "center",                         -- string, optional (default is "center"), "left", "center", or "right"
+   false,                            -- boolean, optional (default is false), true adds a close button in the top left
+   1,                                -- nil/integer, optional (default is nil), nil for non-resizeable, 1 for demi, 2 for full
+   gq_list_end,                      -- function, optional (default is nil), display function to call while resizing
+   gq_list_end,                      -- function, optional (default is nil), display function to call after resizing is done
+   nil,                              -- function, optional (default is nil), cleanup function to call when closed/deleted
+   nil,                              -- string, optional (default is Dina), override the default font name
+   8,                                -- integer, optional (default is 10), override the default font size
+   false,                            -- boolean, optional (default is false), true will prevent the window from appearing until you call :show() on it
+   false                             -- boolean, optional (default is false), if true, pixels the same color as Theme.PRIMARY_BODY will be transparent
+)
+
+if (IsPluginInstalled(plugin_id_z_order) and GetPluginInfo(plugin_id_z_order, 17)) then
+  CallPlugin(plugin_id_z_order, "registerMiniwindow", win)
+end
+
+function mousedown_drag(flags, hotspot_id)
+    win_dragmove_start_x = WindowInfo(win, 14)
+    win_dragmove_start_y = WindowInfo(win, 15)
+end
+
+function dragmove(flags, hotspot_id)
+    if (bit.band(flags, 0x20) == 0) then
+        win_pos_x = WindowInfo(win, 17) -- - 50
+        win_pos_y = WindowInfo(win, 18) -- - 7
+        local delta_x = win_pos_x - win_dragmove_start_x
+        local delta_y = win_pos_y - win_dragmove_start_y
+        local max_x = GetInfo(281) - 100
+        local max_y = GetInfo(280) - 60
+        if (delta_x <= 1) then -- Prevents window from leaving the screen.
+            delta_x = 1
+        elseif (delta_x >= max_x) then
+            delta_x = max_x
+        end
+        if (delta_y <= 1) then
+            delta_y = 1
+        elseif (delta_y >= max_y) then
+            delta_y = max_y
+        end
+        WindowPosition(win, delta_x, delta_y, miniwin.pos_stretch_to_view, miniwin.create_absolute_location) -- move window to new location
+    else
+        return
+    end
+end
+
+function dragrelease(flags, hotspot_id)
+    --  do nothing
+end
+
+function menu_mouseup(flags, hotspotid)
+  if tonumber(flags) == 32 then
+    result = WindowMenu(win, WindowInfo(win,14),WindowInfo(win,15), menu_string)
+    if result ~= "" then
+      local numresult = tonumber(result)
+      if numresult == 1 then
+        togglesound()
+      elseif numresult == 2 then
+        togglewin()
+      elseif numresult == 3 then
+        toggle_25()
+      elseif numresult == 4 then
+        toggle_200()
+      elseif numresult == 5 then
+	    toggle_201()
+	  elseif numresult == 6 then
+        bring_to_front()
+      elseif numresult == 7 then
+        send_to_back()
+      end  -- check which menu item
+    end  -- check not blank
+  end  -- check click type
+end  -- function
+ 
+function mouseup(flags, hotspotid)
+  if tonumber(flags) == 16 then
+    SendNoEcho("gq info " .. string.sub(hotspotid, 9,13))
+  elseif tonumber(flags) == 32 then
+    SendNoEcho("gq join " .. string.sub(hotspotid, 9,13))
+  end
+end
+
+function OnPluginBroadcast(msg, id, name, text)
+  -- check for broadcast from GMCP helper
+  if (id == '3e7dedbe37e44942dd46d264') then
+--    Note("broadcast received")
+    -- check for level change for comparison to GQ level range
+    if (text=="char.status") then
+      level = tonumber(gmcp("char.status.level"))
+      gmcp_state = gmcp("char.status.state")
+    end  -- char status
+    
+    -- listen for GMCP tick and check character state before updating GQ list
+    if (text=="comm.tick") then
+      for i = 1, #char_state do
+        if tonumber(gmcp_state) == tonumber(char_state[i]) then
+          SendNoEcho("gq list")
+        end  -- if
+      end  -- for
+    end  -- comm tick
+
+  end  -- plugin id check
+end  -- function
+
+function OnPluginEnable()
+  OnPluginInstall()
+end
+
+function OnPluginInstall()
+  Note("GQ List Miniwindow installed.  Type \"gqshow\" or \"gqhide\" to toggle the GQ List Miniwindow.")
+  -- get initial char level for comparison to GQ list ranges
+  SendNoEcho("protocols gmcp sendchar")
+  level = gmcp("char.status.level")
+  state = gmcp("char.status.state")
+  SetOption ("play_sounds_in_background", 1)
+  if sound_on == nil then
+    sound_on = true
+  end
+  if auto_toggle == nil then
+    auto_toggle = false
+  end
+  if toggle25 == nil then
+    toggle25 = true
+  end
+  if toggle200 == nil then
+    toggle200 = true
+  end
+  if toggle201 == nil then
+    toggle201 = true
+  end
+  -- values to check to make sure player can receive gq list update
+  for i = 1, #char_state do
+    if tonumber(state) == tonumber(char_state[i]) then
+      SendNoEcho("gq list")
+    end  -- if
+  end  -- for
+  bring_to_front()
+end
+
+function window_show()
+  my_window:show()
+end
+
+function window_hide()
+  my_window:hide()
+end
+
+function gq_list()
+  EnableTriggerGroup("log_info", false)
+  Send("gq list")
+  DoAfterSpecial(1, "EnableTriggerGroup(\"log_info\", true)", 12)
+end
+
+function debug_gq()
+  gqhistory = {}
+  Simulate("Num   Type              From  To  Status     Timer Players\n")
+  Simulate("----- ----------------- ---- ---- ---------- ----- -------\n")
+  Simulate(" 9101 Less than 25 wins  145  160 Active        40       2\n")
+  Simulate(" 9102 25 to 199 wins      40   55 Active        60       0\n")
+  Simulate(" 9103 200 Wins or more   140  155 Active        80       1\n")
+end
+
+]]>
+
+</script>
+
+
+<!-- Triggers -->
+
+<triggers>
+
+<!-- trigger to match start of GQ List -->
+
+  <trigger
+   enabled="y"
+   match="Num   Type              From  To  Status     Timer Players"
+   group="log_info"
+   send_to="12"
+   sequence="100"
+   omit_from_output="y"
+  >
+  </trigger>
+
+  <trigger
+   enabled="y"
+   match="----- ----------------- ---- ---- ---------- ----- -------"
+   group="log_info"
+   send_to="12"
+   sequence="100"
+   omit_from_output="y"
+  >
+  <send>
+    GQ_table = {}
+    EnableTrigger ("GQ_line", true)
+    EnableTrigger ("GQ_stopper", true)
+  </send>
+  </trigger>
+
+<!-- trigger to match a GQ line -->
+
+  <trigger
+   match=" *"
+   name="GQ_line"
+   enabled="n"
+   send_to="12"
+   sequence="50"
+   omit_from_output="y"
+  >
+  <send>
+    table.insert (GQ_table, "%0")  -- add GQ item to our table
+  </send>
+  </trigger>
+
+<!-- trigger to match end of GQ list -->
+  
+  <trigger
+   match="(^&lt;)|^$"
+   name="GQ_stopper"
+   regexp="y"
+   enabled="n"
+   send_to="12"
+   sequence="40"
+   omit_from_output="n"
+   script="gq_list_end"
+  >
+  <send>
+    -- don't need to track GQs any more
+    EnableTrigger ("GQ_line", false)
+    EnableTrigger ("GQ_stopper", false)
+    -- in case no table yet
+    GQ_table = GQ_table or {}
+    table.sort (GQ_table)
+  </send>
+  </trigger>
+
+</triggers>
+
+
+<!-- Aliases -->
+
+<aliases>
+
+<alias match="^gqshow$"
+    script="window_show"  regexp="y"  enabled="y"  ignore_case="y"  send_to="12"  sequence="100"  >
+</alias>
+
+<alias match="^gqhide$"
+    script="window_hide"  regexp="y"  enabled="y"  ignore_case="y"  send_to="12"  sequence="100"  >
+</alias>
+
+<alias match="^gqdebug$"
+    script="debug_gq"  regexp="y"  enabled="y"  ignore_case="y"  send_to="12"  sequence="100"  >
+</alias>
+
+<alias match="^gqsound$"
+    script="togglesound"  regexp="y"  enabled="y"  ignore_case="y"  send_to="12"  sequence="100"  >
+</alias>
+
+<alias match="^gqauto$"
+    script="togglewin"  regexp="y"  enabled="y"  ignore_case="y"  send_to="12"  sequence="100"  >
+</alias>
+
+<alias match="^gq list$"
+    script="gq_list"  regexp="y"  enabled="y"  ignore_case="y"  send_to="12"  sequence="100"  >
+</alias>
+
+</aliases>
+
+
+
+</muclient>
