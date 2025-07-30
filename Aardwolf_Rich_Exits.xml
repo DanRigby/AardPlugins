@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE muclient>
+<muclient>
+    <plugin
+        name="Aardwolf_Rich_Exits"
+        author="deathr"
+        id="e1220a76fc60c20130b2af36"
+        language="Lua"
+        purpose="Converts room exits to hyperlinks and adds custom exits to the list of exits displayed"
+        date_written="2024-11-22 11:44:14"
+        save_state="y"
+        requires="5.07"
+        version="1.8">
+    </plugin>
+
+<!--
+https://github.com/AardPlugins/Aardwolf-Rich-Exits
+-->
+
+    <script>
+<![CDATA[
+dofile(GetPluginInfo(GetPluginID(), 20) .. "Aardwolf_Rich_Exits.lua")
+]]>
+    </script>
+
+    <timers>
+        <timer
+            name="timer_init_plugin"
+            second="0.5"
+            active_closed="y"
+            script="init_plugin"
+            enabled="y"
+            send_to="12"></timer>
+    </timers>
+
+    <aliases>
+        <alias
+            match="^cexit (?<index>\d+)$"
+            script="alias_cexit"
+            enabled="y"
+            regexp="y"
+            sequence="100"
+            ignore_case="y"
+            send_to="12"></alias>
+
+        <alias enabled="y"
+            regexp="y"
+            match="^rexit reset window$"
+            script="alias_reset_window"
+            sequence="100"
+            send_to="12"></alias>
+
+        <alias enabled="y"
+            regexp="y"
+            match="^rexit set maxlength (?<max_length>.*)$"
+            script="alias_set_max_length"
+            sequence="100"
+            send_to="12"></alias>
+
+        <alias enabled="y"
+            regexp="y"
+            match="^rexit set window$"
+            script="alias_set_show_window"
+            sequence="100"
+            send_to="12"></alias>
+
+        <alias enabled="y"
+            regexp="y"
+            match="^rexit set underline$"
+            script="alias_set_draw_underline"
+            sequence="100"
+            send_to="12"></alias>
+
+        <alias enabled="y"
+            regexp="y"
+            match="^rexit set multiline$"
+            script="alias_set_cexit_multiline"
+            sequence="100"
+            send_to="12"></alias>
+
+        <alias enabled="y"
+            regexp="y"
+            match="^rexit set trimcommon$"
+            script="alias_set_trim_common"
+            sequence="100"
+            send_to="12"></alias>
+
+        <alias enabled="y"
+            regexp="y"
+            match="^rexit set exitsafterfight$"
+            script="alias_set_exits_after_fight"
+            sequence="100"
+            send_to="12"></alias>
+
+        <alias enabled="y"
+            regexp="y"
+            match="^rexit debug$"
+            script="alias_set_debug_mode"
+            sequence="100"
+            send_to="12"></alias>
+
+        <alias enabled="y"
+            regexp="y"
+            match="^rexit set cexit (?<dir>north|east|south|west|up|down) (?<cmd>.*)$"
+            script="alias_set_cexit_dir"
+            sequence="100"
+            send_to="12"></alias>
+
+        <alias enabled="y"
+            regexp="y"
+            match="^rexit options$"
+            script="alias_options"
+            sequence="100"
+            send_to="12"></alias>
+
+        <alias enabled="y"
+            regexp="y"
+            match="^rexit help$"
+            script="alias_help"
+            sequence="100"
+            send_to="12"></alias>
+
+        <!-- Update Aliases -->
+        <alias enabled="y"
+            regexp="y"
+            match="^rexit update$"
+            script="alias_update_plugin"
+            sequence="100"
+            send_to="12"></alias>
+
+        <alias enabled="y"
+            regexp="y"
+            match="^rexit force update(?: (?<branch>\S+))?$"
+            script="alias_force_update_plugin"
+            sequence="100"
+            send_to="12"></alias>
+
+        <alias enabled="y"
+            regexp="y"
+            match="^rexit reload$"
+            script="alias_reload_plugin"
+            sequence="100"
+            send_to="12"></alias>
+    </aliases>
+
+    <triggers>
+        <trigger
+            match="^\{exits}\[ Exits: (?<exits>.*) \]$"
+            script="trigger_exits"
+            ignore_case="n"
+            enabled="y"
+            regexp="y"
+            sequence="100"
+            keep_evaluating="y"
+            omit_from_output="y"></trigger>
+
+        <trigger
+            match="^Tag option exits turned ON$"
+            enabled="y"
+            regexp="y"
+            sequence="100"
+            omit_from_output="y"></trigger>
+    </triggers>
+
+</muclient>
