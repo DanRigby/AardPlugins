@@ -9,6 +9,4 @@ Changes shown:
 4. Updated `HyperlinkMapperNotes` to allow the `mappernotecommand` to be called with an index so all configured commands can be executed without resorting to clicking.
 
 Changes not shown:
-1. Updated `Aardwolf_Rich_Exits` to fix a bug where it wouldnt show a custom exit that matches a cardinal direction when the cardinal direction exit had a missing vnum (hidden exit). It now using the exit vnum of the custom exit.
-2. Updated `Aardwolf_Rich_Exits`  to modify the `cexit` alias to allow for `n` `e` `s` `w` `u` `d` in addition to the numerical cexit index. This means I can bind cexit (neswud) to my numpad direction keys and it will handle door cexits automatically if present.
-3. Updated `GQ_List` to fix a bug where the plugin would error when no Global Quests were active due to `row_del` being nil. (Same fix as this: https://github.com/Memnoch1244/GQ-List/pull/2)
+1. Updated `GQ_List` to fix a bug where the plugin would error when no Global Quests were active due to `row_del` being nil. (Same fix as this: https://github.com/Memnoch1244/GQ-List/pull/2)
